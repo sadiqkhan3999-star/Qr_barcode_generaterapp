@@ -1,0 +1,112 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR & Barcode Generator</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #eaf0f8;
+  text-align: center;
+  padding: 20px;
+}
+.container {
+  background: white;
+  max-width: 450px;
+  margin: auto;
+  padding: 25px;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px #aaa;
+}
+h2 {
+  color: #2563eb;
+}
+input {
+  width: 90%;
+  padding: 12px;
+  font-size: 16px;
+  margin: 15px 0;
+  box-sizing: border-box;
+}
+button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  margin: 8px;
+}
+#qrcode, #barcode {
+  margin: 20px auto;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>QR & Barcode Generator</h2>
+
+<input id="text" type="text" placeholder="Enter text or number">
+
+<br>
+
+<button onclick="makeQR()">Generate QR Code</button>
+
+<div id="qrcode"></div>
+
+<button onclick="makeBarcode()">Generate Barcode</button>
+
+<svg id="barcode"></svg>
+
+</div>
+
+<script>
+function makeQR() {
+  let value = document.getElementById("text").value.trim();
+
+  if (!value) {
+    alert("Please enter text");
+    return;
+  }
+
+  document.getElementById("qrcode").innerHTML = "";
+
+  new QRCode(document.getElementById("qrcode"), {
+    text: value,
+    width: 200,
+    height: 200
+  });
+}
+
+function makeBarcode() {
+  let value = document.getElementById("text").value.trim();
+
+  if (!value) {
+    alert("Please enter a number");
+    return;
+  }
+
+  try {
+    JsBarcode("#barcode", value, {
+      format: "CODE128",
+      width: 2,
+      height: 80,
+      displayValue: true
+    });
+  } catch (error) {
+    alert("Invalid barcode text");
+  }
+}
+</script>
+
+</body>
+</html>
+
