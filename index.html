@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,103 +9,395 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <style>
+* { box-sizing: border-box; }
+
 body {
   font-family: Arial, sans-serif;
-  background: #eaf0f8;
-  text-align: center;
+  background: #eef2ff;
+  margin: 0;
   padding: 20px;
+  text-align: center;
+  color: #172554;
 }
+
 .container {
-  background: white;
-  max-width: 450px;
+  max-width: 750px;
   margin: auto;
-  padding: 25px;
-  border-radius: 15px;
-  box-shadow: 0 4px 15px #aaa;
+  background: white;
+  padding: 22px;
+  border-radius: 16px;
+  box-shadow: 0 5px 20px #0002;
 }
-h2 {
-  color: #2563eb;
-}
-input {
-  width: 90%;
-  padding: 12px;
-  font-size: 16px;
-  margin: 15px 0;
-  box-sizing: border-box;
-}
-button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 12px 20px;
+
+h1 { color: #2563eb; }
+
+select, textarea, input, button {
+  width: 100%;
+  padding: 13px;
+  margin: 9px 0;
   border-radius: 8px;
   font-size: 16px;
-  margin: 8px;
 }
-#qrcode, #barcode {
-  margin: 20px auto;
+
+textarea, input, select {
+  border: 1px solid #cbd5e1;
 }
+
+textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:hover { background: #1d4ed8; }
+
+.secondary { background: #475569; }
+
+#results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.result {
+  border: 1px solid #dbeafe;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.result canvas, .result svg {
+  max-width: 100%;
+  height: auto;
+  margin: 10px auto;
+}
+
+.result button { font-size: 13px; }
+
+.note {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.hidden { display: none; }
 </style>
 </head>
 
 <body>
+
 <div class="container">
 
-<h2>QR & Barcode Generator</h2>
+<h1>QR & Barcode Generator</h1>
+<p>Generate single or bulk QR codes and barcodes easily.</p>
 
-<input id="text" type="text" placeholder="Enter text or number">
+<label><b>Select Generator</b></label>
+<select id="type">
+  <option value="qr">QR Code Generator</option>
+  <option value="barcode">Barcode Generator</option>
+</select>
 
-<br>
+<label><b>Select Mode</b></label>
+<select id="mode">
+  <option value="single">Single Generator</option>
+  <option value="bulk">Bulk Generator</option>
+</select>
 
-<button onclick="makeQR()">Generate QR Code</button>
+<div id="singleArea">
+  <input id="singleInput" type="text"
+  placeholder="Enter text, number or product code">
+</div>
 
-<div id="qrcode"></div>
+<div id="bulkArea" class="hidden">
+  <textarea id="bulkInput"
+  placeholder="Enter one item per line&#10;Example:&#10;Product 001&#10;Product 002&#10;Product 003"></textarea>
 
-<button onclick="makeBarcode()">Generate Barcode</button>
+  <p class="note">Or upload a CSV or Excel file.</p>
 
-<svg id="barcode"></svg>
+  <input type="file" id="fileInput"
+  accept=".csv,.xlsx,.xls">
+
+  <p class="note">The first column of your file will be used to generate codes.</p>
+</div>
+
+<button onclick="generateCodes()">Generate Codes</button>
+
+<button class="secondary" onclick="downloadAll()">
+Download All ZIP
+</button>
+
+<button class="secondary" onclick="clearResults()">
+Clear Results
+</button>
+
+<p id="message"></p>
+
+<div id="results"></div>
 
 </div>
 
 <script>
-function makeQR() {
-  let value = document.getElementById("text").value.trim();
 
-  if (!value) {
-    alert("Please enter text");
+const type = document.getElementById("type");
+const mode = document.getElementById("mode");
+const singleArea = document.getElementById("singleArea");
+const bulkArea = document.getElementById("bulkArea");
+const results = document.getElementById("results");
+const message = document.getElementById("message");
+
+let generated = [];
+
+mode.addEventListener("change", function() {
+  singleArea.classList.toggle("hidden", mode.value !== "single");
+  bulkArea.classList.toggle("hidden", mode.value !== "bulk");
+});
+
+let fileItems = [];
+
+document.getElementById("fileInput").addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(event) {
+    try {
+      const workbook = XLSX.read(event.target.result, {
+        type: "array"
+      });
+
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: ""
+      });
+
+      fileItems = rows
+        .map(row => String(row[0] ?? "").trim())
+        .filter(Boolean);
+
+      document.getElementById("bulkInput").value =
+        fileItems.join("\n");
+
+      message.textContent =
+        fileItems.length + " items loaded successfully.";
+    } catch (error) {
+      message.textContent = "Could not read the file. Please check it.";
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+});
+
+function generateCodes() {
+
+  const isBulk = mode.value === "bulk";
+
+  let items = isBulk
+    ? document.getElementById("bulkInput").value
+        .split(/\r?\n/)
+        .map(x => x.trim())
+        .filter(Boolean)
+    : [document.getElementById("singleInput").value.trim()];
+
+  if (!items.length || !items[0]) {
+    message.textContent = "Please enter some text first.";
     return;
   }
 
-  document.getElementById("qrcode").innerHTML = "";
+  if (items.length > 500) {
+    message.textContent = "Please generate up to 500 items at a time.";
+    return;
+  }
 
-  new QRCode(document.getElementById("qrcode"), {
-    text: value,
-    width: 200,
-    height: 200
-  });
+  if (typeof QRCode === "undefined" ||
+      typeof JsBarcode === "undefined" ||
+      typeof XLSX === "undefined" ||
+      typeof JSZip === "undefined") {
+    message.textContent =
+      "A required library did not load. Check your internet connection.";
+    return;
+  }
+
+  results.innerHTML = "";
+  generated = [];
+
+  message.textContent = "Generating codes...";
+
+  const kind = type.value;
+
+  for (let i = 0; i < items.length; i++) {
+
+    const value = items[i];
+
+    const card = document.createElement("div");
+    card.className = "result";
+
+    const title = document.createElement("p");
+    title.textContent = value;
+    card.appendChild(title);
+
+    const filename = "code-" + (i + 1);
+
+    if (kind === "qr") {
+
+      const holder = document.createElement("div");
+      card.appendChild(holder);
+
+      new QRCode(holder, {
+        text: value,
+        width: 180,
+        height: 180,
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      const canvas = holder.querySelector("canvas");
+
+      if (!canvas) {
+        message.textContent = "QR generation failed.";
+        return;
+      }
+
+      const data = canvas.toDataURL("image/png");
+
+      generated.push({
+        filename: filename + ".png",
+        data: data,
+        type: "qr"
+      });
+
+    } else {
+
+      const svg = document.createElementNS(
+        "http://www.w3.org/2000/svg", "svg"
+      );
+
+      card.appendChild(svg);
+
+      try {
+        JsBarcode(svg, value, {
+          format: "CODE128",
+          width: 2,
+          height: 80,
+          displayValue: true,
+          margin: 10
+        });
+      } catch (error) {
+        card.remove();
+        message.textContent =
+          "Barcode generation failed for: " + value;
+        return;
+      }
+
+      const svgText = new XMLSerializer().serializeToString(svg);
+
+      generated.push({
+        filename: filename + ".svg",
+        data: svgText,
+        type: "barcode"
+      });
+    }
+
+    const downloadButton = document.createElement("button");
+    downloadButton.textContent = "Download";
+    downloadButton.onclick = function() {
+      downloadOne(generated[generated.length - 1 - (items.length - 1 - i)]);
+    };
+
+    card.appendChild(downloadButton);
+    results.appendChild(card);
+  }
+
+  message.textContent =
+    "Success! Generated " + generated.length + " codes.";
 }
 
-function makeBarcode() {
-  let value = document.getElementById("text").value.trim();
+function downloadOne(item) {
+  const blob = item.type === "qr"
+    ? dataURLtoBlob(item.data)
+    : new Blob([item.data], {type: "image/svg+xml"});
 
-  if (!value) {
-    alert("Please enter a number");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = item.filename;
+  link.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function dataURLtoBlob(dataURL) {
+  const parts = dataURL.split(",");
+  const binary = atob(parts[1]);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return new Blob([bytes], {type: "image/png"});
+}
+
+async function downloadAll() {
+
+  if (!generated.length) {
+    message.textContent = "Generate some codes first.";
     return;
   }
+
+  if (typeof JSZip === "undefined") {
+    message.textContent = "ZIP library is not available.";
+    return;
+  }
+
+  message.textContent = "Preparing ZIP file...";
+
+  const zip = new JSZip();
+
+  generated.forEach(item => {
+    if (item.type === "qr") {
+      zip.file(item.filename, dataURLtoBlob(item.data));
+    } else {
+      zip.file(item.filename, item.data);
+    }
+  });
 
   try {
-    JsBarcode("#barcode", value, {
-      format: "CODE128",
-      width: 2,
-      height: 80,
-      displayValue: true
-    });
+    const blob = await zip.generateAsync({type: "blob"});
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "all-qr-barcode-codes.zip";
+    link.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    message.textContent = "ZIP downloaded successfully!";
   } catch (error) {
-    alert("Invalid barcode text");
+    message.textContent = "ZIP download failed. Please try again.";
   }
 }
+
+function clearResults() {
+  results.innerHTML = "";
+  generated = [];
+  message.textContent = "Results cleared.";
+}
+
 </script>
 
 </body>
